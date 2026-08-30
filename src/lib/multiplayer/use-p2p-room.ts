@@ -29,28 +29,47 @@ function defaultRoom(): string {
 }
 
 export function useP2PRoom(options: UseP2PRoomOptions = {}): P2PRoomHandle {
-  const [selfId] = useState(() => `p-${Math.random().toString(36).slice(2, 10)}`);
-  const [room] = useState(() => options.room ?? defaultRoom());
-  const [name] = useState(() => options.name ?? selfId);
   const isHost = Boolean(options.isHost);
+  const room = options.room ?? defaultRoom();
+  const cleanRoom = room.trim().toUpperCase();
+  const [selfId] = useState(() =>
+    isHost
+      ? `trupchal-v2-${cleanRoom}-host`
+      : `trupchal-v2-${cleanRoom}-${Math.random().toString(36).slice(2, 8)}`,
+  );
+  const [name] = useState(() => options.name ?? "Player");
   const [peers, setPeers] = useState<PeerInfo[]>([]);
   const [joined, setJoined] = useState(false);
 
   const peerjsRef = useRef<PeerJSRoom | null>(null);
   const p2pRef = useRef<P2PRoom | null>(null);
 
+  const peerjsPeers = useRef<PeerInfo[]>([]);
+  const p2pPeers = useRef<PeerInfo[]>([]);
+
   const listeners = useRef(
     new Set<(from: string, data: unknown, channel: "state" | "reliable") => void>(),
   );
+
+  const syncPeers = useCallback(() => {
+    const map = new Map<string, PeerInfo>();
+    for (const p of peerjsPeers.current) map.set(p.id, p);
+    for (const p of p2pPeers.current) {
+      if (!map.has(p.id)) map.set(p.id, p);
+    }
+    setPeers(Array.from(map.values()));
+  }, []);
 
   useEffect(() => {
     // Primary: PeerJS global WebRTC signaling server
     const peerjs = new PeerJSRoom({
       room,
       isHost,
+      selfId,
       name,
       onPeersChanged: (list) => {
-        setPeers(list);
+        peerjsPeers.current = list;
+        syncPeers();
       },
       onMessage: (from, data) => {
         for (const fn of listeners.current) fn(from, data, "reliable");
@@ -66,7 +85,8 @@ export function useP2PRoom(options: UseP2PRoomOptions = {}): P2PRoomHandle {
       selfId,
       name,
       onPeersChanged: (list) => {
-        setPeers((prev) => (prev.length ? prev : list));
+        p2pPeers.current = list;
+        syncPeers();
       },
       onMessage: (from, data, channel) => {
         for (const fn of listeners.current) fn(from, data, channel);
@@ -82,7 +102,7 @@ export function useP2PRoom(options: UseP2PRoomOptions = {}): P2PRoomHandle {
       p2pRef.current = null;
       p2p.close();
     };
-  }, [room, selfId, name, isHost]);
+  }, [room, selfId, name, isHost, syncPeers]);
 
   const broadcast = useCallback((data: unknown) => {
     peerjsRef.current?.broadcast(data);

@@ -150,24 +150,15 @@ export function OnlineTable({ code, isCreator }: { code: string; isCreator: bool
 
   useEffect(() => {
     if (!iAmHost) return;
-    for (const peer of p2p.peers) {
-      if (stateRef.current) {
-        p2p.send({ t: "start", state: stateRef.current, seats: lobbyRef.current } satisfies Wire, peer.id);
-      } else if (lobbyRef.current.length) {
-        p2p.send({ t: "lobby", seats: lobbyRef.current, hostId: p2p.selfId } satisfies Wire, peer.id);
-      }
-    }
-  }, [p2p.peers, p2p, iAmHost]);
-
-  useEffect(() => {
-    if (!iAmHost || state) return;
     const interval = setInterval(() => {
-      if (lobbyRef.current.length) {
-        p2p.send({ t: "lobby", seats: lobbyRef.current, hostId: p2p.selfId } satisfies Wire);
+      if (stateRef.current) {
+        p2p.broadcast({ t: "start", state: stateRef.current, seats: lobbyRef.current } satisfies Wire);
+      } else if (lobbyRef.current.length) {
+        p2p.broadcast({ t: "lobby", seats: lobbyRef.current, hostId: p2p.selfId } satisfies Wire);
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [iAmHost, state, p2p]);
+  }, [iAmHost, p2p]);
 
   function applyHost(action: GameAction, actor: Seat) {
     const cur = stateRef.current;
@@ -175,8 +166,9 @@ export function OnlineTable({ code, isCreator }: { code: string; isCreator: bool
     try {
       const next = applyAction(cur, action, actor);
       seq.current += 1;
+      stateRef.current = next;
       setState(next);
-      p2p.send({ t: "snap", state: next, seq: seq.current } satisfies Wire);
+      p2p.broadcast({ t: "snap", state: next, seq: seq.current } satisfies Wire);
       if (action.type === "playCard") sfx.play();
       if (action.type === "chooseTrump") sfx.deal();
       if (action.type === "collectTrick") sfx.trick();
@@ -196,7 +188,8 @@ export function OnlineTable({ code, isCreator }: { code: string; isCreator: bool
       const next = prev.map((s) =>
         s.seat === free.seat ? { ...s, isBot: true, name: botName(free.seat, 4), peerId: null } : s,
       );
-      p2p.send({ t: "lobby", seats: next, hostId: p2p.selfId } satisfies Wire);
+      lobbyRef.current = next;
+      p2p.broadcast({ t: "lobby", seats: next, hostId: p2p.selfId } satisfies Wire);
       return next;
     });
   }
@@ -208,9 +201,11 @@ export function OnlineTable({ code, isCreator }: { code: string; isCreator: bool
     const seed = (Math.floor(Math.random() * 0xffffffff) || 1) >>> 0;
     const next = createMatch(seed, 3);
     seq.current = 1;
+    stateRef.current = next;
+    lobbyRef.current = filled;
     setLobby(filled);
     setState(next);
-    p2p.send({ t: "start", state: next, seats: filled } satisfies Wire);
+    p2p.broadcast({ t: "start", state: next, seats: filled } satisfies Wire);
     sfx.deal();
   }
 

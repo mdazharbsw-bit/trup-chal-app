@@ -4,6 +4,7 @@ import type { PeerInfo } from "./p2p";
 export interface PeerJSRoomOptions {
   room: string;
   isHost: boolean;
+  selfId?: string;
   name: string;
   onPeersChanged?: (peers: PeerInfo[]) => void;
   onMessage?: (from: string, data: unknown) => void;
@@ -23,9 +24,11 @@ export class PeerJSRoom {
     this.opts = opts;
     const cleanRoom = opts.room.trim().toUpperCase();
     this.hostPeerId = `trupchal-v2-${cleanRoom}-host`;
-    this.selfId = opts.isHost
-      ? this.hostPeerId
-      : `trupchal-v2-${cleanRoom}-${Math.random().toString(36).slice(2, 8)}`;
+    this.selfId =
+      opts.selfId ??
+      (opts.isHost
+        ? this.hostPeerId
+        : `trupchal-v2-${cleanRoom}-${Math.random().toString(36).slice(2, 8)}`);
   }
 
   public join() {
@@ -54,14 +57,16 @@ export class PeerJSRoom {
 
       this.peer.on("error", (err: any) => {
         console.warn("[PeerJS] error:", err?.type || err);
-        if (!this.opts.isHost && err?.type === "peer-unavailable") {
-          // Retry connecting to host after 1 second if host was busy
-          setTimeout(() => this.connectToHost(), 1500);
+        if (!this.opts.isHost) {
+          this.hostConn = null;
         }
       });
 
-      // Keepalive ping loop
+      // Keepalive & Auto-Reconnect loop
       this.pingTimer = setInterval(() => {
+        if (!this.opts.isHost && (!this.hostConn || !this.hostConn.open)) {
+          this.connectToHost();
+        }
         this.emitPeers();
       }, 2000);
     } catch (err) {
@@ -99,6 +104,10 @@ export class PeerJSRoom {
 
     conn.on("data", (data: any) => {
       if (data && typeof data === "object" && "t" in data) {
+        if (data.t === "join_req" && this.opts.isHost) {
+          conn.metadata = { ...(conn.metadata as any), name: data.name || "Player" };
+          this.emitPeers();
+        }
         this.opts.onMessage?.(conn.peer, data);
       }
     });
