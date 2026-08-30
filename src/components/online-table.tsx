@@ -41,7 +41,7 @@ function isUp(p: PeerInfo) {
 export function OnlineTable({ code, isCreator }: { code: string; isCreator: boolean }) {
   const navigate = useNavigate();
   const [myName] = useState(() => loadName() || "You");
-  const p2p = useP2PRoom({ room: code, name: myName });
+  const p2p = useP2PRoom({ room: code, name: myName, isHost: isCreator });
   const [lobby, setLobby] = useState<LobbySeat[]>([]);
   const [hostId, setHostId] = useState<string | null>(null);
   const [state, setState] = useState<GameState | null>(null);
