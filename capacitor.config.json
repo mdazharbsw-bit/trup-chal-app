@@ -1,0 +1,28 @@
+{
+  "appId": "com.trupchal.app",
+  "appName": "Trup Chal",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true,
+    "backgroundColor": "#0e1b17"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#0e1b17",
+      "showSpinner": false,
+      "androidSpinnerStyle": "small"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0e1b17"
+    }
+  }
+}
