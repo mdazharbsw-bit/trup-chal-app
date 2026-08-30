@@ -1,263 +1,104 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { botAction } from "@/lib/game/ai";
-import { applyAction, createMatch } from "@/lib/game/engine";
 import type { GameAction, GameState, Seat } from "@/lib/game/types";
 import { toClientView } from "@/lib/game/view";
-import { useP2PRoom, type PeerInfo } from "@/lib/multiplayer";
-import { bindAudioUnlock, sfx, unlockAudio } from "@/lib/audio";
-import { botName, loadName } from "@/lib/names";
+import { useServerRoom } from "@/lib/multiplayer/use-server-room";
+import { bindAudioUnlock, sfx } from "@/lib/audio";
+import { loadName } from "@/lib/names";
 import { GameTable, type SeatInfo } from "./game-table";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
 import { shareGame, triggerHaptic } from "@/lib/mobile-native";
 
-type Wire =
-  | { t: "lobby"; seats: LobbySeat[]; hostId: string }
-  | { t: "start"; state: GameState; seats: LobbySeat[] }
-  | { t: "act"; action: GameAction; actor: Seat }
-  | { t: "snap"; state: GameState; seq: number };
-
-interface LobbySeat {
-  seat: Seat;
-  name: string;
-  peerId: string | null;
-  isBot: boolean;
-}
-
-function emptyLobby(hostId: string, hostName: string): LobbySeat[] {
-  return [
-    { seat: 0, name: hostName, peerId: hostId, isBot: false },
-    { seat: 1, name: "", peerId: null, isBot: false },
-    { seat: 2, name: "", peerId: null, isBot: false },
-    { seat: 3, name: "", peerId: null, isBot: false },
-  ];
-}
-
-function isUp(p: PeerInfo) {
-  return p.connectionState === "connected";
-}
-
 export function OnlineTable({ code, isCreator }: { code: string; isCreator: boolean }) {
   const navigate = useNavigate();
   const [myName] = useState(() => loadName() || "You");
-  const p2p = useP2PRoom({ room: code, name: myName, isHost: isCreator });
-  const [lobby, setLobby] = useState<LobbySeat[]>([]);
-  const [hostId, setHostId] = useState<string | null>(null);
-  const [state, setState] = useState<GameState | null>(null);
+  const server = useServerRoom({ room: code, name: myName, isHost: isCreator });
   const [copied, setCopied] = useState(false);
-  const seq = useRef(0);
-  const stateRef = useRef<GameState | null>(null);
-  const lobbyRef = useRef<LobbySeat[]>([]);
   const acting = useRef(false);
-  const seeded = useRef(false);
+  const prevStateRef = useRef<GameState | null>(null);
 
-  const iAmHost = hostId === p2p.selfId || (isCreator && hostId === null);
+  const iAmHost = server.hostId === server.selfId || (isCreator && server.hostId === null);
+  const seats = server.seats;
+  const state = server.state;
 
-  useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
-  useEffect(() => {
-    lobbyRef.current = lobby;
-  }, [lobby]);
   useEffect(() => bindAudioUnlock(), []);
 
+  // Sound effects on state phase transitions
   useEffect(() => {
-    if (!p2p.joined || seeded.current) return;
-    if (!isCreator) return;
-    seeded.current = true;
-    setHostId(p2p.selfId);
-    setLobby(emptyLobby(p2p.selfId, myName));
-  }, [p2p.joined, p2p.selfId, isCreator, myName]);
-
-  useEffect(() => {
-    if (!iAmHost || !seeded.current || stateRef.current) return;
-    setLobby((prev) => {
-      if (prev.length === 0) return prev;
-      let next = prev.map((s) => ({ ...s }));
-      const known = new Set(next.map((s) => s.peerId).filter(Boolean) as string[]);
-      for (const peer of p2p.peers) {
-        if (known.has(peer.id)) {
-          next = next.map((s) =>
-            s.peerId === peer.id && peer.name ? { ...s, name: peer.name } : s,
-          );
-          continue;
-        }
-        const free = next.find((s) => !s.peerId && !s.isBot);
-        if (!free) continue;
-        next = next.map((s) =>
-          s.seat === free.seat
-            ? { ...s, name: peer.name || "Player", peerId: peer.id, isBot: false }
-            : s,
-        );
-        known.add(peer.id);
-      }
-      const live = new Set(p2p.peers.map((p) => p.id));
-      live.add(p2p.selfId);
-      next = next.map((s) =>
-        s.peerId && !live.has(s.peerId) ? { ...s, peerId: null, name: "", isBot: false } : s,
-      );
-      const changed = JSON.stringify(next) !== JSON.stringify(prev);
-      if (changed) {
-        p2p.send({ t: "lobby", seats: next, hostId: p2p.selfId } satisfies Wire);
-      }
-      return changed ? next : prev;
-    });
-  }, [p2p.peers, p2p, iAmHost]);
-
-  useEffect(() => {
-    return p2p.onMessage((from, data) => {
-      const msg = data as Wire;
-      if (!msg || typeof msg !== "object" || !("t" in msg)) return;
-      void from;
-
-      if (msg.t === "lobby") {
-        setHostId(msg.hostId);
-        setLobby(msg.seats);
-        return;
-      }
-      if (msg.t === "start") {
-        setLobby(msg.seats);
-        setState(msg.state);
-        sfx.deal();
-        return;
-      }
-      if (msg.t === "snap") {
-        if (msg.seq <= seq.current) return;
-        seq.current = msg.seq;
-        setState((prev) => {
-          if (msg.state.phase === "trickEnd" && prev?.phase === "playing") sfx.play();
-          if (msg.state.phase === "playing" && prev?.phase === "trickEnd") sfx.trick();
-          if (msg.state.phase === "playing" && prev?.phase === "choosingTrump") sfx.deal();
-          if (
-            (msg.state.phase === "handEnd" || msg.state.phase === "matchEnd") &&
-            prev?.phase !== msg.state.phase
-          ) {
-            if (msg.state.lastResult?.kot) sfx.kot();
-            else sfx.win();
-          }
-          return msg.state;
-        });
-        return;
-      }
-      if (msg.t === "act") {
-        const host = hostId ?? (isCreator ? p2p.selfId : null);
-        if (host !== p2p.selfId) return;
-        applyHost(msg.action, msg.actor);
-      }
-    });
-  }, [p2p, hostId, isCreator]);
-
-  useEffect(() => {
-    if (!iAmHost) return;
-    const interval = setInterval(() => {
-      if (stateRef.current) {
-        p2p.broadcast({ t: "start", state: stateRef.current, seats: lobbyRef.current } satisfies Wire);
-      } else if (lobbyRef.current.length) {
-        p2p.broadcast({ t: "lobby", seats: lobbyRef.current, hostId: p2p.selfId } satisfies Wire);
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [iAmHost, p2p]);
-
-  function applyHost(action: GameAction, actor: Seat) {
-    const cur = stateRef.current;
-    if (!cur) return;
-    try {
-      const next = applyAction(cur, action, actor);
-      seq.current += 1;
-      stateRef.current = next;
-      setState(next);
-      p2p.broadcast({ t: "snap", state: next, seq: seq.current } satisfies Wire);
-      if (action.type === "playCard") sfx.play();
-      if (action.type === "chooseTrump") sfx.deal();
-      if (action.type === "collectTrick") sfx.trick();
-      if (next.phase === "handEnd" || next.phase === "matchEnd") {
-        if (next.lastResult?.kot) sfx.kot();
-        else sfx.win();
-      }
-    } catch {
-      sfx.illegal();
+    if (!state) return;
+    const prev = prevStateRef.current;
+    if (state.phase === "trickEnd" && prev?.phase === "playing") sfx.play();
+    if (state.phase === "playing" && prev?.phase === "trickEnd") sfx.trick();
+    if (state.phase === "playing" && prev?.phase === "choosingTrump") sfx.deal();
+    if (
+      (state.phase === "handEnd" || state.phase === "matchEnd") &&
+      prev?.phase !== state.phase
+    ) {
+      if (state.lastResult?.kot) sfx.kot();
+      else sfx.win();
     }
-  }
+    prevStateRef.current = state;
+  }, [state]);
 
-  function fillBot() {
-    setLobby((prev) => {
-      const free = prev.find((s) => !s.peerId && !s.isBot);
-      if (!free) return prev;
-      const next = prev.map((s) =>
-        s.seat === free.seat ? { ...s, isBot: true, name: botName(free.seat, 4), peerId: null } : s,
-      );
-      lobbyRef.current = next;
-      p2p.broadcast({ t: "lobby", seats: next, hostId: p2p.selfId } satisfies Wire);
-      return next;
-    });
-  }
-
-  function startGame() {
-    const filled = lobby.map((s, i) =>
-      s.peerId || s.isBot ? s : { ...s, isBot: true, name: botName(i, 9) },
-    );
-    const seed = (Math.floor(Math.random() * 0xffffffff) || 1) >>> 0;
-    const next = createMatch(seed, 3);
-    seq.current = 1;
-    stateRef.current = next;
-    lobbyRef.current = filled;
-    setLobby(filled);
-    setState(next);
-    p2p.broadcast({ t: "start", state: next, seats: filled } satisfies Wire);
-    sfx.deal();
-  }
-
+  // Host bot automation loop
   useEffect(() => {
     if (!iAmHost || !state) return;
     if (state.phase === "matchEnd") return;
+
     if (state.phase === "trickEnd") {
-      const t = window.setTimeout(() => applyHost({ type: "collectTrick" }, state.currentPlayer), 1100);
+      const t = window.setTimeout(
+        () => void server.sendAction({ type: "collectTrick" }),
+        1100,
+      );
       return () => window.clearTimeout(t);
     }
     if (state.phase === "handEnd") {
-      const t = window.setTimeout(() => applyHost({ type: "nextHand" }, 0), 1800);
+      const t = window.setTimeout(
+        () => void server.sendAction({ type: "nextHand" }),
+        1800,
+      );
       return () => window.clearTimeout(t);
     }
+
     const actor = state.currentPlayer;
-    const seat = lobby.find((s) => s.seat === actor);
-    if (!seat?.isBot) return;
+    const seatObj = seats.find((s) => s.seat === actor);
+    if (!seatObj?.isBot) return;
     if (acting.current) return;
+
     acting.current = true;
     const t = window.setTimeout(() => {
       try {
-        applyHost(botAction(state, actor), actor);
+        const action = botAction(state, actor);
+        void server.sendAction(action);
       } finally {
         acting.current = false;
       }
-    }, 500 + Math.random() * 700);
+    }, 500 + Math.random() * 600);
+
     return () => {
       window.clearTimeout(t);
       acting.current = false;
     };
-  }, [state, iAmHost, lobby]);
+  }, [state, iAmHost, seats, server]);
 
-  const mySeat = (lobby.find((s) => s.peerId === p2p.selfId)?.seat ?? (isCreator ? 0 : null)) as
-    | Seat
-    | null;
+  const mySeat = (seats.find((s) => s.peerId === server.selfId)?.seat ??
+    (isCreator ? 0 : null)) as Seat | null;
 
-  const filledCount = lobby.filter((s) => s.peerId || s.isBot).length;
-  const humans = lobby.filter((s) => s.peerId).length;
-  const peersReady =
-    p2p.peers.filter((p) => lobby.some((s) => s.peerId === p.id)).every(isUp) || p2p.peers.length === 0;
+  const filledCount = seats.filter((s) => s.peerId || s.isBot).length;
 
-  const seatInfos: SeatInfo[] = (lobby.length ? lobby : emptyLobby(p2p.selfId, myName)).map((s) => ({
-    seat: s.seat,
-    name:
-      s.name ||
-      (s.seat === 0 ? "South" : s.seat === 1 ? "East" : s.seat === 2 ? "North" : "West"),
-    isBot: s.isBot,
-    connected:
-      !s.peerId ||
-      s.peerId === p2p.selfId ||
-      p2p.peers.find((p) => p.id === s.peerId)?.connectionState === "connected",
-  }));
+  const seatInfos: SeatInfo[] = [0, 1, 2, 3].map((st) => {
+    const s = seats.find((item) => item.seat === st);
+    return {
+      seat: st as Seat,
+      name:
+        s?.name ||
+        (st === 0 ? "South" : st === 1 ? "East" : st === 2 ? "North" : "West"),
+      isBot: Boolean(s?.isBot),
+      connected: Boolean(s?.peerId || s?.isBot),
+    };
+  });
 
   async function copyCode() {
     triggerHaptic("tap");
@@ -268,8 +109,8 @@ export function OnlineTable({ code, isCreator }: { code: string; isCreator: bool
     }
   }
 
+  // Pre-game lobby view
   if (!state || mySeat === null) {
-    const rows = lobby.length ? lobby : emptyLobby(p2p.selfId, isCreator ? myName : "");
     return (
       <div className="felt-bg min-h-dvh px-5 py-8">
         <div className="mx-auto w-full max-w-md">
@@ -296,15 +137,15 @@ export function OnlineTable({ code, isCreator }: { code: string; isCreator: bool
           </button>
 
           <ol className="mt-8 space-y-3">
-            {rows.map((s) => {
-              const peer = s.peerId ? p2p.peers.find((p) => p.id === s.peerId) : null;
-              const mine = s.peerId === p2p.selfId;
+            {[0, 1, 2, 3].map((st) => {
+              const s = seats.find((item) => item.seat === st);
+              const mine = s?.peerId === server.selfId;
               const label =
-                s.seat === 0 ? "South" : s.seat === 1 ? "East" : s.seat === 2 ? "North" : "West";
-              const team = s.seat % 2 === 0 ? "NS" : "EW";
+                st === 0 ? "South" : st === 1 ? "East" : st === 2 ? "North" : "West";
+              const team = st % 2 === 0 ? "NS" : "EW";
               return (
                 <li
-                  key={s.seat}
+                  key={st}
                   className={cn(
                     "flex items-center justify-between rounded-md border px-4 py-3",
                     mine ? "border-cream/40 bg-cream/10" : "border-line bg-ink/30",
@@ -315,22 +156,16 @@ export function OnlineTable({ code, isCreator }: { code: string; isCreator: bool
                       {label} · {team}
                     </div>
                     <div className="text-sm font-medium">
-                      {s.name || (s.isBot ? "Bot" : "Empty")}
+                      {s?.name || (s?.isBot ? "Bot" : "Empty")}
                       {mine ? " (you)" : ""}
                     </div>
                   </div>
                   <div className="text-xs text-sage">
-                    {s.peerId
+                    {s?.peerId
                       ? mine
                         ? "Seated"
-                        : peer
-                          ? isUp(peer)
-                            ? "Connected"
-                            : peer.connectionState === "failed"
-                              ? "Can't reach"
-                              : "Linking…"
-                          : "Linking…"
-                      : s.isBot
+                        : "Connected"
+                      : s?.isBot
                         ? "Bot"
                         : iAmHost
                           ? "Open"
@@ -343,56 +178,42 @@ export function OnlineTable({ code, isCreator }: { code: string; isCreator: bool
 
           {iAmHost && (
             <div className="mt-6 flex flex-col gap-3">
-              <Button variant="secondary" disabled={filledCount >= 4} onClick={fillBot}>
+              <Button
+                variant="secondary"
+                disabled={filledCount >= 4}
+                onClick={() => void server.fillBot()}
+              >
                 Fill a seat with a bot
               </Button>
               <Button
-                disabled={filledCount < 4 || !p2p.joined}
+                disabled={filledCount < 4 || !server.joined}
                 onClick={() => {
-                  unlockAudio();
-                  startGame();
+                  sfx.deal();
+                  void server.startGame();
                 }}
               >
                 Deal
               </Button>
-              {!peersReady && humans > 1 && (
-                <p className="text-center text-xs text-sage">Waiting for every phone to link…</p>
-              )}
             </div>
           )}
+
           {!iAmHost && (
-            <p className="mt-6 text-center text-sm text-sage">
-              {p2p.joined ? "Waiting for the host to deal." : "Joining the table…"}
-            </p>
+            <p className="mt-8 text-center text-xs text-sage">Waiting for the host to deal.</p>
           )}
         </div>
       </div>
     );
   }
 
-  const seated: Seat = mySeat ?? 0;
-  const view = toClientView(state, seated);
-  const myTurn = state.currentPlayer === seated;
-  const myHuman = Boolean(lobby.find((s) => s.seat === seated && s.peerId === p2p.selfId));
-
-  function onAction(action: GameAction) {
-    unlockAudio();
-    if (iAmHost) applyHost(action, seated);
-    else p2p.send({ t: "act", action, actor: seated } satisfies Wire);
-  }
+  // Active game view
+  const clientView = toClientView(state, mySeat);
 
   return (
     <GameTable
-      view={view}
+      view={clientView}
       seats={seatInfos}
-      canAct={myHuman && myTurn && (state.phase === "playing" || state.phase === "choosingTrump")}
-      onAction={onAction}
+      onAction={(action) => void server.sendAction(action)}
       onLeave={() => void navigate({ to: "/" })}
-      status={
-        p2p.peers.some((p) => p.connectionState === "failed")
-          ? "A friend could not connect. Try the same wifi, or fill the seat with a bot."
-          : undefined
-      }
     />
   );
 }

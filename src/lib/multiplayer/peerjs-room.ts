@@ -105,7 +105,7 @@ export class PeerJSRoom {
     conn.on("data", (data: any) => {
       if (data && typeof data === "object" && "t" in data) {
         if (data.t === "join_req" && this.opts.isHost) {
-          conn.metadata = { ...(conn.metadata as any), name: data.name || "Player" };
+          (conn as any).metadata = { ...((conn.metadata as any) || {}), name: data.name || "Player" };
           this.emitPeers();
         }
         this.opts.onMessage?.(conn.peer, data);

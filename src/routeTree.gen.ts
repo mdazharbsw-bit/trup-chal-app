@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as HotseatRouteImport } from './routes/hotseat'
 import { Route as PracticeRouteImport } from './routes/practice'
 import { Route as RulesRouteImport } from './routes/rules'
+import { Route as ApiRoomRouteImport } from './routes/api/room'
 import { Route as ApiRtcRouteImport } from './routes/api/rtc'
 import { Route as PlayCodeRouteImport } from './routes/play.$code'
 
@@ -36,6 +37,11 @@ const RulesRoute = RulesRouteImport.update({
   path: '/rules',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiRoomRoute = ApiRoomRouteImport.update({
+  id: '/api/room',
+  path: '/api/room',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiRtcRoute = ApiRtcRouteImport.update({
   id: '/api/rtc',
   path: '/api/rtc',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/hotseat': typeof HotseatRoute
   '/practice': typeof PracticeRoute
   '/rules': typeof RulesRoute
+  '/api/room': typeof ApiRoomRoute
   '/api/rtc': typeof ApiRtcRoute
   '/play/$code': typeof PlayCodeRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/hotseat': typeof HotseatRoute
   '/practice': typeof PracticeRoute
   '/rules': typeof RulesRoute
+  '/api/room': typeof ApiRoomRoute
   '/api/rtc': typeof ApiRtcRoute
   '/play/$code': typeof PlayCodeRoute
 }
@@ -69,21 +77,36 @@ export interface FileRoutesById {
   '/hotseat': typeof HotseatRoute
   '/practice': typeof PracticeRoute
   '/rules': typeof RulesRoute
+  '/api/room': typeof ApiRoomRoute
   '/api/rtc': typeof ApiRtcRoute
   '/play/$code': typeof PlayCodeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/hotseat' | '/practice' | '/rules' | '/api/rtc' | '/play/$code'
+    | '/'
+    | '/hotseat'
+    | '/practice'
+    | '/rules'
+    | '/api/room'
+    | '/api/rtc'
+    | '/play/$code'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/hotseat' | '/practice' | '/rules' | '/api/rtc' | '/play/$code'
+  to:
+    | '/'
+    | '/hotseat'
+    | '/practice'
+    | '/rules'
+    | '/api/room'
+    | '/api/rtc'
+    | '/play/$code'
   id:
     | '__root__'
     | '/'
     | '/hotseat'
     | '/practice'
     | '/rules'
+    | '/api/room'
     | '/api/rtc'
     | '/play/$code'
   fileRoutesById: FileRoutesById
@@ -93,6 +116,7 @@ export interface RootRouteChildren {
   HotseatRoute: typeof HotseatRoute
   PracticeRoute: typeof PracticeRoute
   RulesRoute: typeof RulesRoute
+  ApiRoomRoute: typeof ApiRoomRoute
   ApiRtcRoute: typeof ApiRtcRoute
   PlayCodeRoute: typeof PlayCodeRoute
 }
@@ -127,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RulesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/room': {
+      id: '/api/room'
+      path: '/api/room'
+      fullPath: '/api/room'
+      preLoaderRoute: typeof ApiRoomRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/rtc': {
       id: '/api/rtc'
       path: '/api/rtc'
@@ -149,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   HotseatRoute: HotseatRoute,
   PracticeRoute: PracticeRoute,
   RulesRoute: RulesRoute,
+  ApiRoomRoute: ApiRoomRoute,
   ApiRtcRoute: ApiRtcRoute,
   PlayCodeRoute: PlayCodeRoute,
 }
