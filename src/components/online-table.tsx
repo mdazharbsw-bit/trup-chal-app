@@ -151,7 +151,6 @@ export function OnlineTable({ code, isCreator }: { code: string; isCreator: bool
   useEffect(() => {
     if (!iAmHost) return;
     for (const peer of p2p.peers) {
-      if (!isUp(peer)) continue;
       if (stateRef.current) {
         p2p.send({ t: "start", state: stateRef.current, seats: lobbyRef.current } satisfies Wire, peer.id);
       } else if (lobbyRef.current.length) {
@@ -159,6 +158,16 @@ export function OnlineTable({ code, isCreator }: { code: string; isCreator: bool
       }
     }
   }, [p2p.peers, p2p, iAmHost]);
+
+  useEffect(() => {
+    if (!iAmHost || state) return;
+    const interval = setInterval(() => {
+      if (lobbyRef.current.length) {
+        p2p.send({ t: "lobby", seats: lobbyRef.current, hostId: p2p.selfId } satisfies Wire);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [iAmHost, state, p2p]);
 
   function applyHost(action: GameAction, actor: Seat) {
     const cur = stateRef.current;

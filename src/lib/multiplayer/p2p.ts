@@ -9,7 +9,7 @@
  * rolls back and accepts, so pairs converge without wedging.
  */
 
-export type SignalKind = "offer" | "answer" | "ice";
+export type SignalKind = "offer" | "answer" | "ice" | "msg";
 
 /**
  * Wire contract between this client and the signaling relay the app provides
@@ -90,7 +90,17 @@ export function defaultIceServers(): RTCIceServer[] {
   // gathering, so either one being unreachable costs nothing.
   return [
     {
-      urls: urls?.length ? urls : ["stun:stun.l.google.com:19302", "stun:stun.cloudflare.com:3478"],
+      urls: urls?.length
+        ? urls
+        : [
+            "stun:stun.l.google.com:19302",
+            "stun:stun1.l.google.com:19302",
+            "stun:stun2.l.google.com:19302",
+            "stun:stun3.l.google.com:19302",
+            "stun:stun4.l.google.com:19302",
+            "stun:stun.cloudflare.com:3478",
+            "stun:global.stun.twilio.com:3478",
+          ],
     },
   ];
 }
@@ -146,12 +156,13 @@ export class P2PRoom {
     }).catch(() => {});
   }
 
-  /** Send on the unreliable game-state channel (drops stale packets). */
+  /** Send on the game-state channel (drops stale packets). */
   broadcast(data: unknown): void {
     const wire = JSON.stringify({ t: "d", d: data });
     for (const slot of this.peers.values()) {
       if (slot.state?.readyState === "open") slot.state.send(wire);
     }
+    void this.sendSignal("all", "msg", data);
   }
 
   /** Send reliably (ordered) to one peer, or to all when peerId is omitted. */
@@ -161,6 +172,7 @@ export class P2PRoom {
     for (const slot of targets) {
       if (slot?.reliable?.readyState === "open") slot.reliable.send(wire);
     }
+    void this.sendSignal(peerId || "all", "msg", data);
   }
 
   peerList(): PeerInfo[] {
@@ -365,6 +377,10 @@ export class P2PRoom {
     roster: Set<string>,
   ): Promise<void> {
     if (this.closed) return;
+    if (kind === "msg") {
+      this.opts.onMessage?.(from, payload, "reliable");
+      return;
+    }
     let slot = this.peers.get(from);
     if (!slot) {
       // New peers dial us in the same poll that adds them to the roster.

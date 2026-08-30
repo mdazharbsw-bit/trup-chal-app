@@ -12,9 +12,9 @@ const signalSchema = z.object({
   op: z.literal("signal"),
   room: ID,
   from: ID,
-  to: ID,
-  kind: z.enum(["offer", "answer", "ice"]),
-  payload: z.unknown().refine((v) => v !== undefined && JSON.stringify(v).length <= 32_768, {
+  to: z.string().max(64),
+  kind: z.enum(["offer", "answer", "ice", "msg"]),
+  payload: z.unknown().refine((v) => v !== undefined && JSON.stringify(v).length <= 65_536, {
     message: "payload too large",
   }),
 });
@@ -127,7 +127,7 @@ async function handleGet(url: URL): Promise<Response> {
     payload: unknown;
   }>(
     `SELECT id, from_peer, kind, payload FROM webrtc_signals
-     WHERE room = $1 AND to_peer = $2 AND id > $3
+     WHERE room = $1 AND (to_peer = $2 OR to_peer = 'all') AND from_peer != $2 AND id > $3
      ORDER BY id LIMIT 200`,
     [room, peer, since],
   );
