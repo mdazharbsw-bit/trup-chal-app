@@ -1,0 +1,1 @@
+import{r as e}from"./useRouter-Dpb7RwMI.js";import{t}from"./local-game-Dq6iYFY1.js";var n=e();function r(){return(0,n.jsx)(t,{mode:`hotseat`})}export{r as component};

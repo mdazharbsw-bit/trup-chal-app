@@ -1,0 +1,111 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme {
+  --font-display: "Cormorant Garamond", ui-serif, Georgia, "Times New Roman", serif;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --color-felt: #12241c;
+  --color-felt-deep: #0b1612;
+  --color-felt-edge: #1c3a2e;
+  --color-ink: #101412;
+  --color-cream: #f3ead8;
+  --color-cream-dim: #d4cbb6;
+  --color-sage: #8a9a90;
+  --color-heart: #b4232c;
+  --color-spade: #161a18;
+  --color-line: #2a4036;
+  --color-wash: #183028;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html,
+  body,
+  #app {
+    min-height: 100%;
+    min-height: 100dvh;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-felt-deep);
+    color: var(--color-cream);
+    font-family: var(--font-sans);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    font-family: var(--font-display);
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.felt-bg {
+  background-color: var(--color-felt);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 50% 40%, rgba(255, 255, 255, 0.04), transparent 55%),
+    radial-gradient(circle at 20% 80%, rgba(0, 0, 0, 0.28), transparent 45%),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.035) 2px,
+      rgba(0, 0, 0, 0.035) 3px
+    );
+}
+
+.card-face {
+  background: linear-gradient(180deg, #fbf6ea 0%, var(--color-cream) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+.card-back {
+  background:
+    linear-gradient(135deg, rgba(243, 234, 216, 0.08) 25%, transparent 25%) -8px 0 / 16px 16px,
+    linear-gradient(225deg, rgba(243, 234, 216, 0.08) 25%, transparent 25%) -8px 0 / 16px 16px,
+    linear-gradient(315deg, rgba(243, 234, 216, 0.08) 25%, transparent 25%) 0 0 / 16px 16px,
+    linear-gradient(45deg, rgba(243, 234, 216, 0.08) 25%, transparent 25%) 0 0 / 16px 16px,
+    #16352a;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
+}
+
+.hand-fan {
+  perspective: 900px;
+}

@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Trup Chal",
+      "hasCanvas": false,
+      "bodyTextLen": 401,
+      "bodyTextHash": "dd4847f153f7a2ef9c4e32192c6749502c5d092c7d303122a1d92bbb9f1989bc",
+      "bodyTextPrefix": "COURT PIECE · RANG · HOKM Trup Chal Four players, two teams, one",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Trup Chal",
+      "hasCanvas": false,
+      "bodyTextLen": 401,
+      "bodyTextHash": "dd4847f153f7a2ef9c4e32192c6749502c5d092c7d303122a1d92bbb9f1989bc",
+      "bodyTextPrefix": "COURT PIECE · RANG · HOKM Trup Chal Four players, two teams, one",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
